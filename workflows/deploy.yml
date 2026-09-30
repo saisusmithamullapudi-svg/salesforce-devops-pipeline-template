@@ -1,0 +1,47 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Target environment
+        type: choice
+        options: [uat, production]
+        default: uat
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # GitHub Environments hold per-org variables/secrets and can require a manual approval
+    # (configure "Required reviewers" on the production environment).
+    environment: ${{ github.event.inputs.target || 'uat' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install Salesforce CLI + sfdx-git-delta
+        run: |
+          npm install --global @salesforce/cli
+          echo y | sf plugins install sfdx-git-delta
+      - name: Authenticate (JWT)
+        run: |
+          echo "${{ secrets.SF_JWT_KEY }}" | base64 --decode > server.key
+          sf org login jwt --username "${{ vars.SF_USERNAME }}" --jwt-key-file server.key \
+            --client-id "${{ secrets.SF_JWT_CLIENT_ID }}" --instance-url "${{ vars.SF_INSTANCE_URL }}" --alias target
+          rm server.key
+      - name: Build delta from previous commit
+        run: sf sgd source delta --from HEAD~1 --to HEAD --output-dir delta --generate-delta
+      - name: Deploy delta (production requires tests)
+        run: |
+          LEVEL=RunLocalTests
+          if [ "${{ github.event.inputs.target || 'uat' }}" = "uat" ]; then LEVEL=NoTestRun; fi
+          sf project deploy start --manifest delta/package/package.xml \
+            --post-destructive-changes delta/destructiveChanges/destructiveChanges.xml \
+            --ignore-warnings --test-level "$LEVEL" --target-org target --wait 90
+      - name: Smoke check
+        run: sf apex run --target-org target --file scripts/smoke-test.apex

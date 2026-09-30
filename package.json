@@ -1,0 +1,17 @@
+{
+  "name": "salesforce-devops-pipeline-template",
+  "private": true,
+  "version": "1.0.0",
+  "description": "GitHub Actions CI/CD template for Salesforce DX: delta validation, smart Apex test selection, code analysis and gated production deploys.",
+  "license": "MIT",
+  "scripts": {
+    "lint:format": "prettier --check \"force-app/**/*.{cls,trigger,js,html,json,xml}\"",
+    "format": "prettier --write \"force-app/**/*.{cls,trigger,js,html,json,xml}\"",
+    "test:apex": "sf apex run test --test-level RunLocalTests --code-coverage --result-format human --wait 20",
+    "test:scripts": "node --test \"scripts/test/*.test.js\""
+  },
+  "devDependencies": {
+    "prettier": "^3.3.0",
+    "prettier-plugin-apex": "^2.1.0"
+  }
+}
